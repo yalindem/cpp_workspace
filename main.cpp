@@ -5,6 +5,7 @@
 #include <deque>
 #include <stack>
 #include <queue>
+#include <limits>
 
 namespace ClassProblems
 {
@@ -639,8 +640,73 @@ namespace Algorithms
         Repeat until all nodes are processed.
         */
 
+        typedef std::pair<int, int> Edge;
+        const int INF = std::numeric_limits<int>::max();
+
+        void dijkstra(int start, const std::vector<std::vector<Edge>>& graph, std::vector<int>& distances) 
+        {
+            int n = graph.size();
+            distances.assign(n, INF);
+            distances[start] = 0;
+
+            std::priority_queue<Edge, std::vector<Edge>, std::greater<Edge>> pq;
+            pq.push({0, start});
+
+            while (!pq.empty()) {
+                int dist = pq.top().first;
+                int node = pq.top().second;
+                pq.pop();
+
+                // Daha önce daha kısa bir yol bulunduysa atla
+                if (dist > distances[node])
+                    continue;
+
+                for (const Edge& edge : graph[node]) {
+                    int neighbor = edge.first;
+                    int weight = edge.second;
+                    int newDist = distances[node] + weight;
+
+                    if (newDist < distances[neighbor]) {
+                        distances[neighbor] = newDist;
+                        pq.push({newDist, neighbor});
+                    }
+                }
+            }
+        }
+
         void run()
         {
+            int n = 5;
+            std::vector<std::vector<Edge>> graph(n);
+
+            graph[0].push_back({1, 2});
+            graph[1].push_back({0, 2}); 
+
+            graph[0].push_back({3, 6});
+            graph[3].push_back({0, 6});
+
+            graph[1].push_back({2, 3});
+            graph[2].push_back({1, 3});
+
+            graph[1].push_back({3, 8});
+            graph[3].push_back({1, 8});
+
+            graph[1].push_back({4, 5});
+            graph[4].push_back({1, 5});
+
+            graph[2].push_back({4, 7});
+            graph[4].push_back({2, 7});
+
+            std::vector<int> distances;
+            dijkstra(0, graph, distances);
+
+            for (int i = 0; i < n; ++i) {
+                std::cout << "from 0 to" << i << "shortest path: ";
+                if (distances[i] == INF)
+                    std::cout << "cannot be reached" << std::endl;
+                else
+                    std::cout << distances[i] << std::endl;
+            }
 
         }
     }
