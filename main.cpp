@@ -1146,6 +1146,83 @@ namespace Polymorphism
     }
 }
 
+namespace Constructor
+{
+    class Buffer
+    {
+        private:
+            size_t size_;
+            int* data_;
+        
+        public:
+            Buffer(size_t size) : size_(size), data_(new int[size])
+            {
+                std::cout << "Buffer(" << size <<") constructed\n";
+            }
+
+            //Buffer b = a;
+            //Buffer c(a); 
+            Buffer(const Buffer& other) : size_(other.size_), data_(new int[size_])
+            {
+                std::copy(other.data_, other.data_ + other.size_, data_);
+                std::cout << "Buffer copy constructed\n";
+            }
+
+            //c = a;
+            // Copy Assignment Operator (Derin Kopyalama)
+            Buffer& operator=(const Buffer& other)
+            {
+                if(this != &other)
+                {
+                    delete[] data_;
+                    size_ = other.size_;
+                    data_ = new int[size_];
+                    std::copy(other.data_, other.data_ + size_, data_);
+                }
+                return *this;
+            }
+
+
+            Buffer(Buffer&& other) noexcept : size_(other.size_), data_(other.data_)
+            {
+                other.size_ = 0;
+                other.data_ = nullptr;
+                std::cout << "Buffer move constructed\n";
+            }
+
+            // MOVE ASSIGNMENT OPERATOR (Kaynakları Çalma)
+            Buffer& operator=(Buffer&& other) noexcept
+            {
+                if(this != &other)
+                {
+                    delete[] data_;
+                    size_ = other.size_;
+                    data_ = other.data_;
+                    other.size_ = 0;
+                    other.data_ = nullptr;
+
+                }
+                std::cout << "Buffer move assigned\n";
+                return *this;
+            }
+
+            
+            // Destructor
+            ~Buffer() {
+                delete[] data_;
+                std::cout << "Buffer destroyed\n";
+            }
+    };
+
+    void run()
+    {
+        Buffer b1(100); // Normal constructor
+        Buffer b2 = b1; // Copy constructor çağrılır
+    }
+}
+
+
+
 
 int main()
 {   
@@ -1171,5 +1248,7 @@ int main()
     //Pattern::Command::run();
 
     //Polymorphism::run();
+    Constructor::run();
+
     return 0;
 }
