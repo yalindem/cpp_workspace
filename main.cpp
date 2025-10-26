@@ -7,6 +7,8 @@
 #include <queue>
 #include <limits>
 #include <memory>
+#include <thread>
+#include <future>
 
 namespace ClassProblems
 {
@@ -1221,7 +1223,70 @@ namespace Constructor
     }
 }
 
+namespace Threads
+{
+    namespace deneme_bir
+    {
+        void hello()
+        {
+            std::cout << "hello from thread\n";
+        }
 
+        void func1()
+        {
+            std::thread t(hello);
+            t.join(); // Thread'in bitmesini bekler
+        }
+    }
+
+    namespace deneme_iki
+    {
+        int compute()
+        {
+            return 42;
+        }
+        void func2()
+        {
+            std::future<int> result = std::async(std::launch::async, compute);
+            std::cout << "Result: " << result.get() << std::endl; // get() sonucu alır
+        }
+    }
+
+    namespace deneme_uc
+    {
+        std::mutex mtx;
+        int shared_data = 0;
+
+        void increment() {
+            mtx.lock();
+            ++shared_data;
+            mtx.unlock();
+        }
+
+        void safe_increment() {
+            std::lock_guard<std::mutex> lock(mtx); // RAII: unlock otomatik
+            ++shared_data;
+        }
+
+        void func3()
+        {
+            std::thread t1(safe_increment);
+            std::thread t2(safe_increment);
+            t1.join();
+            t2.join();
+            std::cout << shared_data << std::endl; // 2
+        }
+
+    }
+
+    void run()
+    {
+        //deneme_bir::func1();
+        //deneme_iki::func2();
+        deneme_uc::func3();
+    }
+
+}
 
 
 int main()
@@ -1248,7 +1313,10 @@ int main()
     //Pattern::Command::run();
 
     //Polymorphism::run();
-    Constructor::run();
+    //Constructor::run();
+
+    Threads::run();
+
 
     return 0;
 }
