@@ -9,6 +9,9 @@
 #include <memory>
 #include <thread>
 #include <future>
+#include <condition_variable>
+#include <chrono>
+#include <random>
 
 namespace ClassProblems
 {
@@ -1279,11 +1282,228 @@ namespace Threads
 
     }
 
+    namespace deneme_dort
+    {
+        void backgroundTask() {
+            std::cout << "Background task başlıyor...\n";
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            std::cout << "Background task bitti!\n";
+        }
+
+        void func4() {
+            std::thread t(backgroundTask);
+            t.detach();  // ✅ Artık t bağımsız çalışacak
+            std::cout << "Main thread bitti ama background hala çalışıyor olabilir!\n";
+
+            //detach() edilen thread bağımsız hale gelir → kontrol edemezsin, bekleyemezsin, çıktısını bilemezsin.
+            //Bu yüzden sadece arka plan loglama veya network dinleme gibi işler için uygundur.
+        }
+    }
+
+    namespace deneme_bes
+    {   
+        void increment(int &x) {
+            ++x;
+        }
+
+        void printNumber(int n) {
+            std::cout << "Sayı: " << n << "\n";
+        }
+
+        int counter = 0;
+        std::mutex mtx;
+
+        void increment2() 
+        {
+            for (int i = 0; i < 100000; ++i)
+            {
+                std::lock_guard<std::mutex> lock(mtx); 
+                ++counter;
+            }
+        }
+        
+
+        std::condition_variable cv;
+        std::queue<int> dataQueue;
+        bool done = false;
+
+        void producer()
+        {
+            for (int i = 1; i<=5; ++i)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    dataQueue.push(i);
+                    std::cout << "[Producer] Üretilen veri: " << i << "\n";
+                }
+                cv.notify_one();
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                done = true;
+            }
+
+            cv.notify_all();
+        }
+
+        void consumer(int id)
+        {
+            while(true)
+            {
+                std::unique_lock<std::mutex> lock(mtx);
+                cv.wait(lock, [](){return !dataQueue.empty() || done;});
+                if (!dataQueue.empty()) {
+                    int value = dataQueue.front();
+                    dataQueue.pop();
+                    lock.unlock(); // uzun işlemden önce kilidi açıyoruz
+                    std::cout << "--- [Consumer " << id << "] Veriyi işliyor: " << value << "\n";
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+                }
+                else if (done) {
+                    break; // üretici bitti, kuyruk boş → çık
+                }
+            }
+            std::cout << "  [Consumer " << id << "] İş bitti.\n";
+        }
+
+
+
+        void func5()
+        {
+            /*
+            std::thread t([](){
+                std::cout << "Lambda thread çalışıyor!\n";
+            });
+            t.join();
+
+            std::thread t2(printNumber, 42); 
+            if (t2.joinable())
+            {
+                t2.join();
+            }
+
+            int value = 10;
+            std::thread t3(increment, std::ref(value));
+            if (t3.joinable())
+            {
+                t3.join();
+            }
+            std::cout << "Sonuç: " << value << "\n";
+            */
+
+            /*
+            std::thread t4(increment2);
+            std::thread t5(increment2);
+            t4.join();
+            t5.join();
+            std::cout << "Counter: " << counter << "\n";
+            */
+
+            std::thread prod(producer);
+            std::thread cons1(consumer, 1);
+            std::thread cons2(consumer, 2);
+            prod.join();
+            cons1.join();
+            cons2.join();
+            std::cout << "Tüm işler tamamlandı.\n";
+        }
+    }
+
+    namespace deneme_sensors
+    {
+        std::mutex mtx;
+        std::condition_variable cv;
+        std::queue<float> sensorDataQueue;
+        bool done = false;
+
+        float readSensor()
+        {
+            static std::default_random_engine generator(std::random_device{}());
+            static std::uniform_real_distribution<float> distribution(20.0, 30.0);
+            return distribution(generator);
+        }
+
+        void sensorThread()
+        {
+            for(int i = 0; i < 10; ++i)
+            {
+                float value = readSensor();
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    sensorDataQueue.push(value);
+                    std::cout << "[Sensor] Veri okundu: " << value << " °C\n";
+                }
+                cv.notify_one();
+                std::this_thread::sleep_for(std::chrono::milliseconds(400));
+            }
+        
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                done = true;
+            }
+        }
+
+        void processorThread() {
+            std::vector<float> window;
+
+            const size_t windowSize = 3;
+        
+            while(true)
+            {
+                std::unique_lock<std::mutex> lock(mtx);
+                cv.wait(lock, [](){return !sensorDataQueue.empty() || done;});
+
+                if(!sensorDataQueue.empty())
+                {
+                    float data = sensorDataQueue.front();
+                    sensorDataQueue.pop();
+                    lock.unlock();
+
+                    window.push_back(data);
+                    if(window.size() > windowSize)
+                    {
+                        window.erase(window.begin());
+                    }
+
+                    
+                    float sum = 0.0f;
+                    for (float v : window) sum += v;
+                    float avg = sum / window.size(); 
+
+                    std::cout << "  [Processor] Ortalama (" << window.size() << " örnek): " << avg << " °C\n";
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // işleme süresi
+                }
+                else if (done) {
+                    break;
+                }
+            }
+            std::cout << "  [Processor] İşleme tamamlandı.\n";
+        
+        }
+        
+        void run()
+        {
+            std::thread sensor(sensorThread);
+            std::thread processor(processorThread);
+            sensor.join();
+            processor.join();
+
+            std::cout << "Tüm sensör işlemleri tamamlandı.\n";
+        }
+
+    }
+
     void run()
     {
         //deneme_bir::func1();
         //deneme_iki::func2();
-        deneme_uc::func3();
+        //deneme_uc::func3();
+        //deneme_dort::func4();
+        //deneme_bes::func5();
+        deneme_sensors::run();
     }
 
 }
