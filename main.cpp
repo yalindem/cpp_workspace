@@ -6,6 +6,7 @@
 #include <stack>
 #include <queue>
 #include <limits>
+#include <memory>
 
 namespace ClassProblems
 {
@@ -757,12 +758,400 @@ namespace Algorithms
 
 }
 
+namespace Pattern
+{
+    namespace Command
+    {
+        class RobotArm
+        {
+            public:
+                void grip() {
+                    std::cout << "ARM: Gripping the object tightly." << std::endl;
+                }
+
+                void release() {
+                    std::cout << "ARM: Releasing the object." << std::endl;
+                }
+        };
+
+        class RobotWheels {
+            public:
+                void moveForward(int distance) {
+                    std::cout << "WHEELS: Moving forward " << distance << " units." << std::endl;
+                }
+
+                void moveBackward(int distance) {
+                    std::cout << "WHEELS: Moving backward " << distance << " units." << std::endl;
+                }
+        };
+
+        class Command {
+            public:
+                virtual ~Command() = default;
+                virtual void execute() = 0;
+                virtual void undo() = 0;
+        };  
+        
+        
+        // Concrete Command 1: Move Forward
+        class MoveForwardCommand : public Command {
+            private:
+                RobotWheels& wheels_;
+                int distance_;
+
+            public:
+                MoveForwardCommand(RobotWheels& wheels, int distance)
+                    : wheels_(wheels), distance_(distance) {}
+
+                void execute() override {
+                    wheels_.moveForward(distance_);
+                }
+
+                void undo() override {
+                    // Undoing a move forward command means moving backward.
+                    wheels_.moveBackward(distance_); 
+                }
+        };
+
+        // Concrete Command 2: Grip an Object
+        class GripCommand : public Command {
+            private:
+                RobotArm& arm_;
+
+            public:
+                GripCommand(RobotArm& arm) : arm_(arm) {}
+
+                void execute() override {
+                    arm_.grip();
+                }
+
+                void undo() override {
+                    // Undoing a grip command means releasing.
+                    arm_.release(); 
+                }
+        };
+
+        class RobotTaskQueue {
+            private:
+                // Using std::unique_ptr ensures RAII is applied to Command objects.
+                std::vector<std::unique_ptr<Command>> tasks_;
+                std::vector<std::unique_ptr<Command>> completedTasks_; // For undo history
+
+            public:
+                void addTask(std::unique_ptr<Command> command) {
+                    tasks_.push_back(std::move(command));
+                }
+
+                void executeQueue() {
+                    std::cout << "\n--- Task Queue Started ---" << std::endl;
+                    while (!tasks_.empty()) {
+                        std::unique_ptr<Command> command = std::move(tasks_.front());
+                        tasks_.erase(tasks_.begin());
+                        
+                        command->execute();
+                        completedTasks_.push_back(std::move(command)); // Move to history
+                    }
+                    std::cout << "--- Task Queue Finished ---" << std::endl;
+                }
+
+                void undoLastCommand() {
+                    if (completedTasks_.empty()) {
+                        std::cout << "No commands to undo." << std::endl;
+                        return;
+                    }
+
+                    std::unique_ptr<Command> lastCommand = std::move(completedTasks_.back());
+                    completedTasks_.pop_back();
+
+                    std::cout << "\n--- Undoing Last Command ---" << std::endl;
+                    lastCommand->undo();
+                    
+                    // The undone command is discarded in this simple model.
+                }
+        };
+
+        int run()
+        {
+            RobotWheels wheels;
+            RobotArm arm;
+            
+            // 2. Create the Invoker (Task Queue)
+            RobotTaskQueue taskQueue;
+
+            // 3. The Client creates and configures Concrete Commands.
+            
+            // Task 1: Move 5 units forward
+            taskQueue.addTask(std::make_unique<MoveForwardCommand>(wheels, 5)); 
+            
+            // Task 2: Grip the object
+            taskQueue.addTask(std::make_unique<GripCommand>(arm));
+            
+            // Task 3: Move 2 units forward
+            taskQueue.addTask(std::make_unique<MoveForwardCommand>(wheels, 2)); 
+            
+            // 4. The Invoker executes the sequence.
+            taskQueue.executeQueue();
+            
+            // 5. Undo Functionality Test
+            // Undoing the last command ("Move 2 units forward") will trigger moveBackward(2).
+            taskQueue.undoLastCommand(); 
+
+            /* Expected Output:
+
+            --- Task Queue Started ---
+            WHEELS: Moving forward 5 units.
+            ARM: Gripping the object tightly.
+            WHEELS: Moving forward 2 units.
+            --- Task Queue Finished ---
+
+            --- Undoing Last Command ---
+            WHEELS: Moving backward 2 units.
+            */
+        }
+
+    }
+
+    /*
+    namespace State
+    {
+        // Forward declaration
+        class RobotContext; 
+
+        // 1. State Interface
+        class RobotState {
+            public:
+                virtual ~RobotState() = default;
+                
+                // Actions whose behavior changes based on the state
+                virtual void handleMovement(RobotContext* context) = 0;
+                virtual void handlePower(RobotContext* context) = 0;
+                
+                // For debugging/logging
+                virtual std::string getStateName() const = 0;
+        };
+        
+        // 2. Context
+        class RobotContext {
+            private:
+                std::unique_ptr<RobotState> currentState_;
+
+            public:
+                RobotContext(std::unique_ptr<RobotState> initialState) : currentState_(std::move(initialState)) {
+                    std::cout << "Robot initialized in state: " << currentState_->getStateName() << std::endl;
+                }
+
+                // Method to change the robot's state (transition)
+                void changeState(std::unique_ptr<RobotState> newState) {
+                    std::cout << "--- TRANSITION: " << currentState_->getStateName() << " -> " << newState->getStateName() << " ---" << std::endl;
+                    currentState_ = std::move(newState);
+                }
+                
+                // Delegate actions to the current state object
+                void move() {
+                    currentState_->handleMovement(this);
+                }
+
+                void managePower() {
+                    currentState_->handlePower(this);
+                }
+        };
+
+        // Concrete State 1: Robot is Moving and Performing Tasks
+        class NavigatingState : public RobotState {
+            public:
+                std::string getStateName() const override { 
+                    return "NAVIGATING"; 
+                }
+
+                void handleMovement(RobotContext* context) override {
+                    std::cout << "NAVIGATING: Moving at full speed, running pathfinding algorithms." << std::endl;
+                    // Navigation logic...
+                }
+
+                void handlePower(RobotContext* context) override {
+                    // If battery is low, transition to ChargingState
+                    int batteryLevel = 15; // Simulated low battery
+                    if (batteryLevel < 20) {
+                        std::cout << "NAVIGATING: Battery low, seeking charger." << std::endl;
+                        // State transition logic
+                        context->changeState(std::make_unique<class ChargingState>()); 
+                    } else {
+                        std::cout << "NAVIGATING: Power consumption is high." << std::endl;
+                    }
+                }
+        };
+
+        // Concrete State 2: Robot is Charging
+        class ChargingState : public RobotState {
+            public:
+                std::string getStateName() const override { return "CHARGING"; }
+
+                void handleMovement(RobotContext* context) override {
+                    std::cout << "CHARGING: Movement is disabled to maintain connection." << std::endl;
+                }
+
+                void handlePower(RobotContext* context) override {
+                    std::cout << "CHARGING: Actively drawing power and monitoring temperature." << std::endl;
+                    // If battery is full, transition to SleepingState
+                    int batteryLevel = 99; // Simulated full battery
+                    if (batteryLevel > 95) {
+                        std::cout << "CHARGING: Charge complete. Entering standby." << std::endl;
+                        // State transition logic
+                        context->changeState(std::make_unique<class SleepingState>());
+                    }
+                }
+        };
+
+        // Concrete State 3: Robot is in Low-Power Standby
+        class SleepingState : public RobotState {
+        public:
+            std::string getStateName() const override { return "SLEEPING"; }
+
+            void handleMovement(RobotContext* context) override {
+                std::cout << "SLEEPING: All motors powered off. No movement allowed." << std::endl;
+            }
+
+            void handlePower(RobotContext* context) override {
+                std::cout << "SLEEPING: Ultra-low power mode. Monitoring external wake-up signals." << std::endl;
+                // If a new task comes in, transition to NavigatingState
+                bool newTaskReceived = true; // Simulated event
+                if (newTaskReceived) {
+                    std::cout << "SLEEPING: New task received! Waking up." << std::endl;
+                    // State transition logic
+                    context->changeState(std::make_unique<NavigatingState>()); 
+                }
+            }
+        };
+
+        void run()
+        {
+            // 1. Initialize the robot with an initial state (e.g., Navigating)
+            auto initial_state = std::make_unique<NavigatingState>();
+            RobotContext robot(std::move(initial_state));
+
+            std::cout << "\n--- Scenario 1: Running Task ---\n";
+            robot.move();      // Executes NavigatingState::handleMovement
+            robot.managePower(); // Executes NavigatingState::handlePower -> Causes transition!
+
+            std::cout << "\n--- Scenario 2: Charging Cycle ---\n";
+            robot.move();      // Executes ChargingState::handleMovement
+            robot.managePower(); // Executes ChargingState::handlePower -> Causes transition!
+            
+            std::cout << "\n--- Scenario 3: Sleeping and Waking ---\n";
+            robot.move();      // Executes SleepingState::handleMovement
+            robot.managePower(); // Executes SleepingState::handlePower -> Causes transition!
+
+            std::cout << "\n--- Scenario 4: Final State Check ---\n";
+            robot.move();      // Back in NavigatingState
+        }
+    } // namespace State
+    
+*/
+
+
+}
+
+
+namespace Polymorphism
+{
+    class Shape {
+        public:
+            virtual void draw() const = 0; // Saf sanal fonksiyon - abstract class
+            virtual double area() const = 0;
+            virtual ~Shape() = default; // Base sınıflarda virtual destructor ŞART!
+        };
+
+        // Türetilmiş sınıflar
+        class Circle : public Shape {
+        private:
+            double radius_;
+        public:
+            Circle(double r) : radius_(r) {}
+            void draw() const override {
+                std::cout << "Drawing Circle with radius " << radius_ << std::endl;
+            }
+            double area() const override {
+                return 3.14159 * radius_ * radius_;
+            }
+        };
+
+        class Rectangle : public Shape {
+        private:
+            double width_, height_;
+        public:
+            Rectangle(double w, double h) : width_(w), height_(h) {}
+            void draw() const override {
+                std::cout << "Drawing Rectangle " << width_ << "x" << height_ << std::endl;
+            }
+            double area() const override {
+                return width_ * height_;
+            }
+        };
+    
+
+    //Factory Pattern
+    std::unique_ptr<Shape> createShape(const std::string& type, double param1, double param2 = 0)
+    {
+        if (type == "circle")
+        {
+            return std::make_unique<Circle>(param1);
+        }
+        else if(type == "rectangle")
+        {
+            return std::make_unique<Rectangle>(param1, param2);
+        }
+        throw std::invalid_argument("Unknown shape type");
+    }
+
+    // Strategy Pattern
+    class DrawingTool {
+        private:
+            std::unique_ptr<Shape> shape_; // Hangi şekli çizeceğimizi bilmiyoruz, sadece Shape arayüzünü biliyoruz
+        public:
+            DrawingTool(std::unique_ptr<Shape> shape) : shape_(std::move(shape)) {}
+            
+            void useTool() {
+                std::cout << "Using drawing tool: ";
+                shape_->draw();
+            }
+    };
+    
+
+    void strategyExample() {
+        // Aynı tool'u farklı şekillerle kullanabiliriz
+        DrawingTool circleTool(std::make_unique<Circle>(7.0));
+        DrawingTool rectTool(std::make_unique<Rectangle>(3.0, 9.0));
+        
+        circleTool.useTool(); // Drawing Circle with radius 7
+        rectTool.useTool();   // Drawing Rectangle 3x9
+    }
+    
+    void run()
+    {
+        std::vector<std::unique_ptr<Shape>> shapes;
+        //shapes.reserve(0);
+
+        auto shape1 = createShape("circle", 10.0);
+        auto shape2 = createShape("circle", 15.0);
+        auto shape3 = createShape("rectangle", 5.0, 5.0);
+        auto shape4 = createShape("rectangle", 5.0, 10.0);
+
+        shapes.push_back(std::move(shape1));
+        shapes.push_back(std::move(shape2));
+        shapes.push_back(std::move(shape3));
+        shapes.push_back(std::move(shape4));
+
+        strategyExample();
+        
+    }
+}
+
 
 int main()
 {   
 
     //ClassProblems::DiamondProblem::run();
-    ClassProblems::Virtual::run();
+    //ClassProblems::Virtual::run();
 
     //STL::STL_vector::run();
     //STL::STL_list::run();
@@ -778,5 +1167,9 @@ int main()
 
     //Algorithms::DFS::run();
     //Algorithms::BFS::run();
+
+    //Pattern::Command::run();
+
+    //Polymorphism::run();
     return 0;
 }
