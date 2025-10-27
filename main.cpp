@@ -1496,6 +1496,152 @@ namespace Threads
 
     }
 
+    namespace lockguard_vs_uniquelock
+    {
+        std::mutex mtx;
+        void lockguard(int &x) {
+            std::lock_guard<std::mutex> lock(mtx);  // otomatik lock
+            ++x;
+            // scope bitince otomatik unlock
+            /*
+            🔹 Kullanımı çok kolaydır.
+            🔹 Hızlıdır.
+            🔹 Ama kilidi manuel açmak veya condition_variable ile beklemek mümkün değildir.
+            */
+        }
+
+        void uniquelock() {
+            std::unique_lock<std::mutex> lock(mtx);  // lock()
+            std::cout << "Kritik bölge\n";
+            lock.unlock();  // manuel unlock
+            std::cout << "Artık kilit serbest\n";
+        }
+
+        // Example2
+
+        std::condition_variable cv;
+        bool ready;
+
+        void worker()
+        {
+            std::unique_lock<std::mutex> lock(mtx);
+            cv.wait(lock, [] { return ready; });  // 🔹 kilidi geçici bırakır, sonra tekrar alır
+            std::cout << "Çalışmaya başladım!\n";
+        }
+
+        void test()
+        {
+            std::thread t(worker);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                ready = true;
+            }
+            cv.notify_one();
+            t.join();
+        }
+
+        // Locking strategies
+        // 1- defer_lock
+        // 2- try_to_lock
+        // 3- adopt_lock
+
+        // EXAMPLE 1
+        int buffer = 0;
+        void task(const char* threadNumber, int loopFor)
+        {   
+            // part1
+            /*
+            std::unique_lock<std::mutex> lock(mtx); //automatically calls lock on mutex mtx
+            for(int i = 0; i < loopFor; ++i)
+            {
+                buffer++;
+                std::cout << threadNumber <<  " " << buffer << std::endl;
+            }
+            */
+
+            //part2
+            // does the same thing, so std::unique_lock<std::mutex> lock(mtx) does the same thing, it locks and unlocks
+            /*
+            mtx.lock();
+            for(int i = 0; i < loopFor; ++i)
+            {
+                buffer++;
+                std::cout << threadNumber <<  " " << buffer << std::endl;
+            }
+            mtx.unlock();
+            */
+            
+            //part3
+            std::unique_lock<std::mutex> lock(mtx, std::defer_lock); // does not call lock on mutex mtx
+            lock.lock();
+            for(int i = 0; i < loopFor; ++i)
+            {
+                buffer++;
+                std::cout << threadNumber <<  " " << buffer << std::endl;
+            }
+
+        }
+
+        void run()
+        {
+            std::thread t1(task, "T1", 10);
+            std::thread t2(task, "T2", 10);
+            t1.join();
+            t2.join();
+        }
+
+    }
+
+    namespace conditional_variables
+    {
+        std::condition_variable cv;
+        std::mutex m;
+        long balance = 0;
+
+        void addMoney(int money)
+        {
+            std::lock_guard<std::mutex> lg(m); // 3- acquire the mutex m;
+            balance += money;
+            std::cout << "Amount added current balance: " << balance << "\n";
+            cv.notify_one(); // bu satiri sil ve neler oldugunu kontrol et // 4- notify whoever waiting this thread
+        }
+
+        void withdrowMoney(int money)
+        {   
+            // we will wait here if the m is locked by another function
+            std::unique_lock<std::mutex> lu(m); // 1- locked the mutex m
+
+            //cv.wait is like an while loop
+            cv.wait(lu, []{return balance!=0 ? true:false;}); // 2- releasing the mutex m // 5- now the condition is true
+
+            // we could also use wait_for or wait_until instead wait
+            //cv.wait_until(lu, std::chrono::system_clock::now() + std::chrono::seconds(2), []{return balance != 0 ? true:false;});
+            //cv.wait_for(lu, std::chrono::milliseconds(0), []{return balance != 0 ? true:false;});
+            //6- now condition is true
+            if(balance >= money)
+            {
+                balance -= money;
+                std::cout << "Amount deducted: " << money << "\n";
+            }
+            else
+            {
+                std::cout << "Amount cant be deducted, current balance less than" << money << "\n";
+            }
+            std::cout << "current balance is: " << balance << "\n";
+        }
+
+        void run()
+        {
+            std::thread t1(withdrowMoney, 500);
+            //std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::thread t2(addMoney, 500);
+
+            t1.join();
+            t2.join();
+        }
+    }
+
     void run()
     {
         //deneme_bir::func1();
@@ -1503,7 +1649,9 @@ namespace Threads
         //deneme_uc::func3();
         //deneme_dort::func4();
         //deneme_bes::func5();
-        deneme_sensors::run();
+        //deneme_sensors::run();
+        //lockguard_vs_uniquelock::run();
+        conditional_variables::run();
     }
 
 }
