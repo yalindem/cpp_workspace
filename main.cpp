@@ -1734,6 +1734,51 @@ namespace Sensors
     }
 }
 
+namespace Fusion
+{
+    template<typename T>
+    class ThreadSafeQueue {
+    private:
+        std::queue<T> q;
+        mutable std::mutex mtx;
+    public:
+        void push(const T& value) {
+            std::lock_guard<std::mutex> lock(mtx);
+            q.push(value);
+        }
+
+        std::optional<T> pop() {
+            std::lock_guard<std::mutex> lock(mtx);
+            if (q.empty())
+                return std::nullopt;
+            T value = q.front();
+            q.pop();
+            return value;
+        }
+
+        bool empty() const {
+            std::lock_guard<std::mutex> lock(mtx);
+            return q.empty();
+        }
+
+        size_t size() const {
+            std::lock_guard<std::mutex> lock(mtx);
+            return q.size();
+        }
+    };
+
+
+    void fusion()
+    {
+
+    }
+
+    void run()
+    {
+
+    }
+}
+
 int main()
 {   
 
@@ -1761,8 +1806,7 @@ int main()
     //Constructor::run();
 
     //Threads::run();
-
-    Sensors::run();
+    //Sensors::run();
     
 
     return 0;
