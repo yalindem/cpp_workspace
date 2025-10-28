@@ -1656,6 +1656,83 @@ namespace Threads
 
 }
 
+namespace Sensors
+{
+
+    struct SensorData
+    {
+        double value;
+        std::chrono::system_clock::time_point timestamp;
+    };
+
+    SensorData sensorA, sensorB, sensorC;
+    std::mutex mtxA, mtxB, mtxC;
+
+
+    void sensorTask(const std::string& name, SensorData& data, std::mutex& mtx, int period_ms, double step)
+    {
+        double value {0.0};
+        while(true)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(period_ms));
+            value += step;
+
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                data.value = value;
+                data.timestamp = std::chrono::system_clock::now();
+            }
+
+            std::cout << "[" << name << "] Yeni veri: " << value << " (" << 1000.0 / period_ms << " Hz)\n";
+        }
+    }
+
+    void readerTask(int period_ms)
+    {
+        while(true)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(period_ms));
+            SensorData a, b, c;
+            {
+                std::lock_guard<std::mutex> lockA(mtxA);
+                a = sensorA;
+            }
+
+            {
+                std::lock_guard<std::mutex> lockB(mtxB);
+                b = sensorB;
+            }
+            {
+                std::lock_guard<std::mutex> lockC(mtxC);
+                c = sensorC; 
+            }
+            auto now = std::chrono::system_clock::now();
+            auto ageA = std::chrono::duration_cast<std::chrono::milliseconds>(now - a.timestamp).count();
+            auto ageB = std::chrono::duration_cast<std::chrono::milliseconds>(now - b.timestamp).count();
+            auto ageC = std::chrono::duration_cast<std::chrono::milliseconds>(now - c.timestamp).count();
+
+
+            std::cout << "\n=== [Reader] Sensör verileri (" << 1000.0 / period_ms << " Hz) ===\n";
+            std::cout << "A: " << a.value << " (age: " << ageA << " ms)\n";
+            std::cout << "B: " << b.value << " (age: " << ageB << " ms)\n";
+            std::cout << "C: " << c.value << " (age: " << ageC << " ms)\n";
+            std::cout << "==========================================\n\n";
+        }
+    }
+
+    void run()
+    {
+        std::thread tA(sensorTask, "SensorA", std::ref(sensorA), std::ref(mtxA), 100, 0.5);   // 10 Hz
+        std::thread tB(sensorTask, "SensorB", std::ref(sensorB), std::ref(mtxB), 200, 1.0);   // 5 Hz
+        std::thread tC(sensorTask, "SensorC", std::ref(sensorC), std::ref(mtxC), 500, 2.0);   // 2 Hz
+        std::thread tReader(readerTask, 500);                                                 // 2 Hz
+
+        tA.join();
+        tB.join();
+        tC.join();
+        tReader.join();
+    }
+}
 
 int main()
 {   
@@ -1683,8 +1760,10 @@ int main()
     //Polymorphism::run();
     //Constructor::run();
 
-    Threads::run();
+    //Threads::run();
 
+    Sensors::run();
+    
 
     return 0;
 }
