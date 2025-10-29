@@ -12,6 +12,8 @@
 #include <condition_variable>
 #include <chrono>
 #include <random>
+#include <optional>
+
 
 namespace ClassProblems
 {
@@ -1736,6 +1738,20 @@ namespace Sensors
 
 namespace Fusion
 {
+
+    struct TempData {
+        float temperature;
+        std::string unit;
+    };
+
+    struct ImuData {
+        float accelX, accelY, accelZ;
+    };
+
+    struct PressureData {
+        int pressure;
+    };
+
     template<typename T>
     class ThreadSafeQueue {
     private:
@@ -1767,15 +1783,85 @@ namespace Fusion
         }
     };
 
+    
+    void sensorA(ThreadSafeQueue<TempData>& q) {
+        std::mt19937 gen(std::random_device{}());
+        std::uniform_real_distribution<float> dist(20.0, 25.0);
 
-    void fusion()
-    {
+        while (true) {
+            TempData data{dist(gen), "°C"};
+            q.push(data);
+            std::cout << "[SensorA] Temp: " << data.temperature << data.unit << "\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 10 Hz
+        }
+    }
 
+    void sensorB(ThreadSafeQueue<ImuData>& q) {
+        std::mt19937 gen(std::random_device{}());
+        std::uniform_real_distribution<float> dist(-1.0, 1.0);
+
+        while (true) {
+            ImuData data{dist(gen), dist(gen), dist(gen)};
+            q.push(data);
+            std::cout << "[SensorB] IMU: (" << data.accelX << ", "
+                    << data.accelY << ", " << data.accelZ << ")\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 5 Hz
+        }
+    }
+
+    void sensorC(ThreadSafeQueue<PressureData>& q) {
+        std::mt19937 gen(std::random_device{}());
+        std::uniform_int_distribution<int> dist(1000, 1020);
+
+        while (true) {
+            PressureData data{dist(gen)};
+            q.push(data);
+            std::cout << "[SensorC] Pressure: " << data.pressure << " hPa\n";
+            std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 2 Hz
+        }
+    }
+
+
+
+    void fusion(ThreadSafeQueue<TempData>& qA,
+                ThreadSafeQueue<ImuData>& qB,
+                ThreadSafeQueue<PressureData>& qC) {
+
+        while (true) {
+            auto temp = qA.pop();
+            auto imu = qB.pop();
+            auto pres = qC.pop();
+
+            std::cout << "[Fusion] ";
+
+            if (temp) std::cout << "T=" << temp->temperature << temp->unit << " ";
+            else std::cout << "T=--- ";
+
+            if (imu) std::cout << "IMU=(" << imu->accelX << "," << imu->accelY << "," << imu->accelZ << ") ";
+            else std::cout << "IMU=(---) ";
+
+            if (pres) std::cout << "P=" << pres->pressure << "hPa\n";
+            else std::cout << "P=---\n";
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
     }
 
     void run()
     {
+        ThreadSafeQueue<TempData> qTemp;
+        ThreadSafeQueue<ImuData> qImu;
+        ThreadSafeQueue<PressureData> qPress;
 
+        std::thread tA(sensorA, std::ref(qTemp));
+        std::thread tB(sensorB, std::ref(qImu));
+        std::thread tC(sensorC, std::ref(qPress));
+        std::thread tFusion(fusion, std::ref(qTemp), std::ref(qImu), std::ref(qPress));
+
+        tA.join();
+        tB.join();
+        tC.join();
+        tFusion.join();
     }
 }
 
@@ -1807,7 +1893,7 @@ int main()
 
     //Threads::run();
     //Sensors::run();
-    
+    Fusion::run();
 
     return 0;
 }
