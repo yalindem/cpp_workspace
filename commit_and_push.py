@@ -7,15 +7,24 @@ SOURCE = "main.cpp"
 # Argümanları oku
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--commit", help="Commit message", required=True)
+parser.add_argument("-a", "--amend", help="Commit message", required=False)
 args = parser.parse_args()
 commit_message = args.commit
+is_amend = args.amend
 
 # Git komutları
-cmds = [
-    ["git", "add", SOURCE],
-    ["git", "commit", "-m", commit_message],
-    ["git", "push"]
-]
+if not is_amend:
+    cmds = [
+        ["git", "add", SOURCE],
+        ["git", "commit", "-m", commit_message],
+        ["git", "push"]
+    ]
+else:
+    cmds = [
+        ["git", "add", SOURCE],
+        ["git", "commit", "-m", commit_message, "--amend"],
+        ["git", "push", "-f"]
+    ]    
 
 for cmd in cmds:
     print(f"🔹 Running: {' '.join(cmd)}")
