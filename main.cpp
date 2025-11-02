@@ -1819,14 +1819,22 @@ namespace STL_extended
         {
             for(int i = 0; i<20; ++i)
             {
-                nums.push_back(rand() % 101);
+                nums.push_back(rand() % 51);
             }
         }
 
 
         void copy_vec(const std::vector<int>& vec, std::vector<int>& new_vec)
         {
-            std::copy_if(vec.begin(), vec.end(), new_vec.begin(), [](int i){return i%2 == 0;});
+            std::copy_if(vec.begin(), vec.end(), std::back_inserter(new_vec), [](int i){ return i%2 == 0; }); 
+        }
+
+        void transform_vec(const std::vector<int>& vec, std::vector<int>& new_vec)
+        {
+            //std::transform(vec.begin(), vec.end(), std::back_inserter(new_vec), [](int i){ return i*i; });
+            //back_inserter kullanmak istemiyorsan resize kullanmalisin
+            new_vec.resize(vec.size()); // transform için yeterli alan
+            std::transform(vec.begin(), vec.end(), new_vec.begin(), [](int i){ return i*i; });
         }
 
         void run()
@@ -1837,13 +1845,116 @@ namespace STL_extended
             std::vector<int> new_vec{};
             copy_vec(nums, new_vec);
             print_vec(new_vec);
+            std::vector<int> new_vec2{};
+            transform_vec(new_vec, new_vec2);
+            print_vec(new_vec2);
+        }
+    }
+
+    namespace Task4
+    {
+
+        struct Student {
+            std::string name;
+            int age;
+            double gpa;
+        };
+
+        void print_students(const std::vector<Student>& students)
+        {   
+            std::cout << "Students: [\n";
+            std::for_each(students.begin(), students.end(), [](const Student& s){
+                std::cout << "\t" << "name: "<< s.name << "\tage: " << s.age << "\t\tgpa: " << s.gpa << "\n";
+            });
+            std::cout << "]\n";
+        }
+
+        void generateStudents(std::vector<Student>& students)
+        {
+            Student student1;
+            Student student2;
+            Student student3;
+            Student student4;
+            Student student5;
+
+            student1.name = "Ahmet";
+            student2.name = "Mehmet";
+            student3.name = "Ziya";
+            student4.name = "Dursun";
+            student5.name = "Hasan";
+
+            student1.age = 12;
+            student2.age = 10;
+            student3.age = 9;
+            student4.age = 13;
+            student5.age = 11;
+
+            student1.gpa = 2.0;
+            student2.gpa = 1.0;
+            student3.gpa = 3.0;
+            student4.gpa = 2.5;
+            student5.gpa = 3.96;
+
+            students.push_back(student1);
+            students.push_back(student2);
+            students.push_back(student3);
+            students.push_back(student4);
+            students.push_back(student5);
+        }
+
+        void sort_students_gpa(std::vector<Student>& students)
+        {
+            std::sort(students.begin(), students.end(), [](const Student& s1, const Student& s2){return s1.gpa>s2.gpa;});
+        }
+
+        void filter_students(std::vector<Student>& students, std::vector<Student>& new_vec)
+        {
+            std::copy_if(students.begin(), students.end(), std::back_inserter(new_vec), [](Student s){return s.gpa<3.0;});
+            std::cout << "Students under 3.0: [\n";
+            std::for_each(new_vec.begin(), new_vec.end(), [](const Student& s){
+                std::cout << "\t" << "name: "<< s.name << "\n";
+            });
+            std::cout << "]\n";
+        }
+
+        double average_gpa(const std::vector<Student>& students)
+        {
+            if(students.empty()) return 0.0;
+
+            double sum = std::accumulate(
+                students.begin(), 
+                students.end(), 
+                0.0, 
+                [](double acc, const Student& s){ 
+                    acc += s.gpa;
+                    return acc;
+                }
+            );
+
+            // Ortalama hesapla
+            return sum / students.size();
+        }
+
+        void run()
+        {
+            std::vector<Student> students;
+            generateStudents(students);
+            print_students(students);
+            sort_students_gpa(students);
+            print_students(students);
+            std::vector<Student> students_under;
+            filter_students(students, students_under);
+            double average = average_gpa(students);
+            std::cout << "average: " << average << "\n";
         }
     }
 
     void run()
     {
         //Task1::run();
-        Task2::run();
+        //Task2::run();
+        //Task3::run();
+        Task4::run();
     }
 }
 
