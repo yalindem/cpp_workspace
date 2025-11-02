@@ -15,6 +15,7 @@
 #include <optional>
 #include <cstring>
 #include <utility>
+#include <cstdlib>
 
 namespace ClassProblems
 {
@@ -1688,6 +1689,137 @@ namespace Fusion
     }
 }
 
+namespace STL_extended
+{
+    /* 
+        [Sequence] → sıraya göre tutar → Eklediğin sırayı korur → vector, deque, list, array, forward_list
+        [Associative] → key’e göre tutar → Veriyi sıralı key ile saklar → map, multimap, set, multiset
+        [Unordered] → hash tabanlı tutar → Veriyi hash tablosu ile saklar (sırasız) → unordered_map, unordered_set
+
+        [Container adapters] → Yani stack veya queue aslında kendisi veri saklamaz, altta std::deque veya std::vector kullanır ama erişimi sınırlar.
+
+        KARAR AGACI:
+
+        1. Sabit boyut mu?
+        → Evet → std::array
+        → Hayır →
+            2. Ekleme sırası önemli mi?
+                → Evet → Sequence containers
+                → Hayır →
+                    3. Key tabanlı erişim mi?
+                        → Evet → map/set
+                        → Hayır → unordered_map/unordered_set
+
+        SENARYO:
+
+        Senaryo	                                    Container
+        Dinamik büyüyen dizi, index erişimi	        std::vector
+        Kuyruk (FIFO)	                            std::queue
+        Stack (LIFO)	                            std::stack
+        Ortadan sık ekleme/silme	                std::list
+        Benzersiz sıralı set	                    std::set
+        Key→Value sıralı	                        std::map
+        Key→Value hızlı (hash)	                    std::unordered_map
+        En yüksek öncelikli eleman	                std::priority_queue
+    */
+
+    template<typename T>
+    void print_vec(const std::vector<T>& vec)
+    {
+        std::cout << "vec = [ ";
+        std::for_each(vec.begin(), vec.end(), [](const T& i){ std::cout << i << " "; });
+        std::cout << "]\n";
+    }
+
+    namespace Task1
+    {   
+        
+
+        void calc_sum(const std::vector<int>& vec, int& sum)
+        {
+            //std::for_each(vec.begin(), vec.end(), [&sum](int i){sum+=i;});
+            sum = std::accumulate(vec.begin(), vec.end(), 0);
+        }
+
+        void run()
+        {
+            std::vector<int> nums{};
+            for(int i = 1; i <= 10; ++i)
+            {
+                nums.push_back(i);
+            }
+            print_vec(nums);
+
+            int sum = 0;
+            calc_sum(nums, sum);
+            std::cout << "sum: " << sum << "\n";
+
+            nums.pop_back();
+            print_vec(nums);
+        }
+
+    }
+
+    namespace Task2
+    {
+        void generateNumbers(std::vector<int>& nums)
+        {
+            for(int i = 0; i<15; ++i)
+            {
+                nums.push_back(rand() % 101);
+            }
+        }
+
+        void sort(std::vector<int>& nums)
+        {
+            std::sort(nums.begin(), nums.end());
+        }
+
+        void makeUnique(std::vector<int>& nums)
+        {
+            nums.erase(std::unique(nums.begin(), nums.end()), nums.end());
+        }
+
+        int get_min(std::vector<int>& vec)
+        {
+            return *std::min_element(vec.begin(), vec.end());
+        }
+        
+        int get_max(std::vector<int>& vec)
+        {
+            return *std::max_element(vec.begin(), vec.end());
+        }
+
+        int get_sum(std::vector<int>& vec)
+        {
+            return std::accumulate(vec.begin(), vec.end(), 0);
+        }
+
+        void run()
+        {
+            std::vector<int> nums {};
+            generateNumbers(nums);
+            print_vec(nums);
+            sort(nums);
+            print_vec(nums);
+            makeUnique(nums);
+            print_vec(nums);
+            std::cout << "min: " << get_min(nums) << "\n";
+            std::cout << "min: " << get_max(nums) << "\n";
+            std::cout << "sum: " << get_sum(nums) << "\n";
+
+        }
+
+    }
+
+    void run()
+    {
+        //Task1::run();
+        Task2::run();
+    }
+}
+
+
 int main()
 {   
 
@@ -1720,7 +1852,7 @@ int main()
     //Sensors::run();
     //Fusion::run();
 
-
+    STL_extended::run();
 
 
     //learn topics in future
