@@ -13,7 +13,7 @@
 #include <chrono>
 #include <random>
 #include <optional>
-
+#include <cstring>
 
 namespace ClassProblems
 {
@@ -1155,77 +1155,67 @@ namespace Polymorphism
 
 namespace Constructor
 {
-    class Buffer
-    {
+    class String{
         private:
-            size_t size_;
-            int* data_;
-        
+            char* data;
+
         public:
-            Buffer(size_t size) : size_(size), data_(new int[size])
+            String(const char* s = "")
             {
-                std::cout << "Buffer(" << size <<") constructed\n";
+                std::cout << "Constructor\n";
+                data = new char[strlen(s) + 1];
+                strcpy(data, s);
             }
 
-            //Buffer b = a;
-            //Buffer c(a); 
-            Buffer(const Buffer& other) : size_(other.size_), data_(new int[size_])
+            //Copy Constructor
+            String(const String& other)
             {
-                std::copy(other.data_, other.data_ + other.size_, data_);
-                std::cout << "Buffer copy constructed\n";
+                std::cout << "Copy Constructor\n";
+                // data = other.data; // Shallow copy, which copies just the memory adress of other.data to data
+                                      // if we call delete[] data, that would cause some issues because then 
+                                      // the memory adress will be released and data or other.data couldnt 
+                                      // be reached anymore
+
+                data = new char[strlen(other.data) + 1];
+                strcpy(data, other.data);
             }
 
-            //c = a;
-            // Copy Assignment Operator (Derin Kopyalama)
-            Buffer& operator=(const Buffer& other)
+            //Move Constructor
+            String(String&& other)
             {
+                std::cout << "Move Constructor\n";
+                // like a shallow copy but not dangerous since we take the ownership doing other.data = nullptr;
+                data = other.data;
+                other.data = nullptr;
+            }
+
+            // Copy assignment operator
+            String& operator=(const String& other)
+            {
+                std::cout << "Copy assignment\n";
                 if(this != &other)
                 {
-                    delete[] data_;
-                    size_ = other.size_;
-                    data_ = new int[size_];
-                    std::copy(other.data_, other.data_ + size_, data_);
+                    delete[] data;
+                    data = new char[strlen(other.data) + 1];
+                    strcpy(data, other.data);
                 }
                 return *this;
             }
 
-
-            Buffer(Buffer&& other) noexcept : size_(other.size_), data_(other.data_)
+            // Move assignment operator
+            String& operator=(String&& other)
             {
-                other.size_ = 0;
-                other.data_ = nullptr;
-                std::cout << "Buffer move constructed\n";
-            }
-
-            // MOVE ASSIGNMENT OPERATOR (Kaynakları Çalma)
-            Buffer& operator=(Buffer&& other) noexcept
-            {
+                std::cout << "Copy assignment\n";
                 if(this != &other)
                 {
-                    delete[] data_;
-                    size_ = other.size_;
-                    data_ = other.data_;
-                    other.size_ = 0;
-                    other.data_ = nullptr;
-
+                    delete[] data;
+                    data = other.data;
+                    other.data = nullptr;
                 }
-                std::cout << "Buffer move assigned\n";
                 return *this;
             }
-
-            
-            // Destructor
-            ~Buffer() {
-                delete[] data_;
-                std::cout << "Buffer destroyed\n";
-            }
-    };
-
-    void run()
-    {
-        Buffer b1(100); // Normal constructor
-        Buffer b2 = b1; // Copy constructor çağrılır
     }
+ 
 }
 
 namespace Threads
@@ -1893,7 +1883,14 @@ int main()
 
     //Threads::run();
     //Sensors::run();
-    Fusion::run();
+    //Fusion::run();
+
+
+
+
+    //learn topics in future
+        // type_traits
+        // std::forward and forwarding references (https://www.youtube.com/watch?v=RW9KnqszYj4&t=87s)
 
     return 0;
 }
