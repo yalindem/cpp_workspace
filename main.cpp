@@ -1153,8 +1153,22 @@ namespace Polymorphism
     }
 }
 
-namespace Constructor
-{
+namespace CopyandMoveConstructor
+{   
+    //
+    /*
+        Eğer hiçbirini yazmazsan:
+        Derleyici otomatik olarak copy constructor ve copy assignment oluşturur.
+
+        Ama move constructor’ı sadece copy constructor yoksa otomatik üretir.
+
+        Birini manuel yazarsan, diğerleri bazen otomatik oluşturulmaz.
+        Bu yüzden Rule of Five der:
+
+        “Eğer birini yazıyorsan, muhtemelen hepsini yazmalısın.”
+    
+    */
+
     class String{
         private:
             char* data;
@@ -1214,6 +1228,15 @@ namespace Constructor
                 }
                 return *this;
             }
+    };
+
+    void run()
+    {
+        String a("Yalin");      // Constructor
+        String b = a;           // Copy constructor
+        String c = std::move(a); // Move constructor
+        b = c;                  // Copy assignment
+        c = String("GPT");      // Move assignment
     }
  
 }
@@ -1879,7 +1902,7 @@ int main()
     //Pattern::Command::run();
 
     //Polymorphism::run();
-    //Constructor::run();
+    //CopyandMoveConstructor::run();
 
     //Threads::run();
     //Sensors::run();
