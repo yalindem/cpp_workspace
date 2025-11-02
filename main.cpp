@@ -14,6 +14,7 @@
 #include <random>
 #include <optional>
 #include <cstring>
+#include <utility>
 
 namespace ClassProblems
 {
@@ -1003,6 +1004,53 @@ namespace CopyElision
     }
 }
 
+namespace PerfectForwarding
+{
+    /*
+        std::forward<T>(x) derleyiciye şunu söyler:
+        “x değişkenini, çağıran fonksiyona tam olarak doğru değer kategorisi (lvalue veya rvalue) ile ilet.”
+        Eğer x bir lvalue ise → lvalue olarak iletir
+        Eğer x bir rvalue ise → rvalue olarak iletir
+        std::forward sayesinde bir template fonksiyonu, argümanın türüne göre otomatik olarak copy veya move yapabilir.
+    */
+
+    void foo(int& x) 
+    { 
+        std::cout << "lvalue ref\n"; 
+    }
+    void foo(int&& x) 
+    { 
+        std::cout << "rvalue ref\n"; 
+    }
+
+    template<typename T>
+    void relay(T&& arg) {
+        foo(std::forward<T>(arg));  // perfect forwarding
+    }
+
+    template<typename T, typename U>
+    void addToVector(std::vector<T>& v, U&& value)
+    {
+        v.push_back(std::forward<T>(value));
+    }
+
+    void run()
+    {
+        int a = 10;
+        relay(a);       // lvalue → foo(int&)
+        relay(20);      // rvalue → foo(int&&)
+
+        std::vector<std::string> v;
+        std::string s = "hello";
+
+        addToVector(v, s);              // copy
+        addToVector(v, std::string("world")); // move
+    }
+
+
+    
+}
+
 namespace Threads
 {
     namespace deneme_bir
@@ -1665,7 +1713,8 @@ int main()
 
     //Polymorphism::run();
     //CopyandMoveConstructor::run();
-    CopyElision::run();
+    //CopyElision::run();
+    //PerfectForwarding::run();
 
     //Threads::run();
     //Sensors::run();
