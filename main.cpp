@@ -901,7 +901,7 @@ namespace CopyandMoveConstructor
             }
 
             //Move Constructor
-            String(String&& other)
+            String(String&& other) noexcept
             {
                 std::cout << "Move Constructor\n";
                 // like a shallow copy but not dangerous since we take the ownership doing other.data = nullptr;
@@ -923,9 +923,9 @@ namespace CopyandMoveConstructor
             }
 
             // Move assignment operator
-            String& operator=(String&& other)
+            String& operator=(String&& other) noexcept
             {
-                std::cout << "Copy assignment\n";
+                std::cout << "Move assignment\n";
                 if(this != &other)
                 {
                     delete[] data;
@@ -1608,7 +1608,7 @@ int main()
     //Pattern::Command::run();
 
     //Polymorphism::run();
-    //CopyandMoveConstructor::run();
+    CopyandMoveConstructor::run();
 
     //Threads::run();
     //Sensors::run();
