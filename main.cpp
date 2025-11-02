@@ -947,6 +947,62 @@ namespace CopyandMoveConstructor
  
 }
 
+namespace CopyElision
+{   
+    /*
+        eskiden:
+        --------
+        String makeString() {
+         String s("hello");
+         return s;
+        }
+
+        Derleyici şunu yapardı:
+        1- s nesnesini oluşturur.
+        2- return s; derken bir copy constructor çağırır (geri dönen nesneye).
+        3- Çağıran fonksiyonda da bir kopya daha oluşabilir.
+
+        Yani 2–3 kez aynı veriyi kopyalardı. Bu da büyük objelerde ciddi performans kaybıydı.
+    
+    */
+    
+    struct A {
+        A() { std::cout << "Default ctor\n"; }
+        A(const A&) { std::cout << "Copy ctor\n"; }
+        A(A&&) noexcept { std::cout << "Move ctor\n"; }
+        ~A() { std::cout << "Dtor\n"; }
+    };
+
+    // 1️⃣ RVO (Return Value Optimization) / unnamed temporary
+    A make1() {
+        return A(); // unnamed temporary -> RVO
+    }
+
+    // 2️⃣ NRVO (Named Return Value Optimization) / named variable
+    A make2() {
+        A a;
+        return a;   // named variable -> NRVO
+    }
+
+    // 3️⃣ std::move
+    A make3() {
+        A a;
+        return std::move(a); // RVO devre dışı, move ctor çağrılır
+    }
+
+    void run()
+    {
+        std::cout << "--- make1 ---\n";
+        A x1 = make1();
+
+        std::cout << "--- make2 ---\n";
+        A x2 = make2();
+
+        std::cout << "--- make3 ---\n";
+        A x3 = make3();
+    }
+}
+
 namespace Threads
 {
     namespace deneme_bir
@@ -1608,7 +1664,8 @@ int main()
     //Pattern::Command::run();
 
     //Polymorphism::run();
-    CopyandMoveConstructor::run();
+    //CopyandMoveConstructor::run();
+    CopyElision::run();
 
     //Threads::run();
     //Sensors::run();
