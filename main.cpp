@@ -1812,6 +1812,34 @@ namespace STL_extended
 
     }
 
+    namespace Task3
+    {
+
+        void generateNumbers(std::vector<int>& nums)
+        {
+            for(int i = 0; i<20; ++i)
+            {
+                nums.push_back(rand() % 101);
+            }
+        }
+
+
+        void copy_vec(const std::vector<int>& vec, std::vector<int>& new_vec)
+        {
+            std::copy_if(vec.begin(), vec.end(), new_vec.begin(), [](int i){return i%2 == 0;});
+        }
+
+        void run()
+        {
+            std::vector<int> nums;
+            generateNumbers(nums);
+            print_vec(nums);
+            std::vector<int> new_vec{};
+            copy_vec(nums, new_vec);
+            print_vec(new_vec);
+        }
+    }
+
     void run()
     {
         //Task1::run();
