@@ -1958,6 +1958,174 @@ namespace STL_extended
     }
 }
 
+namespace ProducerConsumer
+{   
+
+    namespace first_example
+    {
+
+        std::mutex mtx;
+
+        float randomFloat()
+        {
+            return (float)(rand()) / (float)(RAND_MAX);
+        }
+
+        struct Data
+        {
+            float x;
+            float y;
+            float z;
+        };
+
+        std::queue<Data> data_queue;
+
+        void producer()
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                Data data{ randomFloat(), randomFloat(), randomFloat() };
+
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    data_queue.push(data);
+
+                    std::cout << "[Produced] x: " << data.x 
+                    << " y: " << data.y 
+                    << " z: " << data.z << "\n";
+                }
+            }
+        }
+
+        void consumer(const int id)
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(400));
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    if (data_queue.empty())
+                    {
+                        // yapacak bir şey yok, boş dön
+                        continue;
+                    }
+                    const Data data = data_queue.front();
+                    std::cout << "[Consumer " << id << "] Consumed: x=" << data.x
+                    << " y=" << data.y << " z=" << data.z << "\n";
+                    data_queue.pop();
+                }
+            }
+
+        }
+
+        void run()
+        {
+            std::thread t1(producer);
+            std::thread t2(consumer, 1);
+            std::thread t3(consumer, 2);
+            std::thread t4(consumer, 3);
+            std::thread t5(consumer, 4);
+
+            t1.join();
+            t2.join();
+            t3.join();
+            t4.join();
+            t5.join();
+        }
+
+    }
+
+    namespace second_example
+    {
+        std::mutex mtx;
+        std::condition_variable cv;
+        bool stop_flag = false;
+
+
+        struct Data
+        {
+            float x;
+            float y;
+            float z;
+        };
+
+        std::queue<Data> data_queue;
+        
+        float randomFloat()
+        {
+            return (float)(rand()) / (float)(RAND_MAX);
+        }
+
+        void producer()
+        {
+            while (!stop_flag)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                Data data{ randomFloat(), randomFloat(), randomFloat() };
+
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    data_queue.push(data);
+                }
+
+                std::cout << "[Produced] x: " << data.x 
+                        << " y: " << data.y 
+                        << " z: " << data.z << "\n";
+
+                cv.notify_one(); // bir consumer'ı uyandır
+            }
+
+            // Tüm consumer'ları durdurmak için notify_all()
+            cv.notify_all();
+        }
+
+        void consumer(const int id)
+        {
+            while (true)
+            {
+                std::unique_lock<std::mutex> lock(mtx);
+                cv.wait(lock, [] { return !data_queue.empty() || stop_flag; });
+
+                if (stop_flag && data_queue.empty())
+                    break; // üretici durdu, artık çık
+
+                Data data = data_queue.front();
+                data_queue.pop();
+                lock.unlock();
+
+                std::cout << "[Consumer " << id << "] Consumed: x=" << data.x
+                        << " y=" << data.y << " z=" << data.z << "\n";
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(400));
+            }
+        }
+
+        void run()
+        {
+            std::thread t1(producer);
+            std::thread t2(consumer, 1);
+            std::thread t3(consumer, 2);
+            std::thread t4(consumer, 3);
+            std::thread t5(consumer, 4);
+
+            t1.join();
+            t2.join();
+            t3.join();
+            t4.join();
+            t5.join();
+        }
+
+    }
+
+    void run()
+    {
+        first_example::run();
+        //second_example::run();
+    }
+
+}
 
 int main()
 {   
@@ -1991,8 +2159,8 @@ int main()
     //Sensors::run();
     //Fusion::run();
 
-    STL_extended::run();
-
+    //STL_extended::run();
+    ProducerConsumer::run();
 
     //learn topics in future
         // type_traits
