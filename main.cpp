@@ -2127,6 +2127,119 @@ namespace ProducerConsumer
 
 }
 
+namespace ConditionalVariable
+{
+    namespace task1
+    {
+        std::mutex mtx;
+        std::condition_variable cv;
+        std::queue<int> number_queue;
+
+        void producer()
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+                int a = rand() % 101;
+                std::cout << "Number generated: " << a << std::endl;
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    number_queue.push(a);
+                }
+                cv.notify_one();
+            }
+
+        }
+
+        void consumer(const int id)
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                std::unique_lock<std::mutex> lock(mtx);
+                cv.wait(lock, [](){return !number_queue.empty();});
+                std::cout << "id: " << id << "------number: " << number_queue.front() << "\n";
+                number_queue.pop();
+                lock.unlock();
+            }
+        }
+
+        void run()
+        {
+            std::thread t1(producer);
+            std::thread t2(consumer, 1);
+            std::thread t3(consumer, 2);
+
+            t1.join();
+            t2.join();
+            t3.join();
+
+        }
+    }
+
+    namespace task2
+    {
+        std::vector<int> number_vec;
+        std::condition_variable cv;
+        std::mutex mtx;
+
+
+        void writer()
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                int random_number = rand() % 11;
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    number_vec.push_back(random_number);
+                    std::cout << "generated number: " << random_number << "\n";
+                }
+                cv.notify_all();
+            }
+            
+        }
+
+    
+        void reader()
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(2));
+                std::unique_lock<std::mutex> lock(mtx);
+                cv.wait(lock, [&](){return number_vec.size() >= 5; });
+                for(int i = 0; i < number_vec.size(); ++i)
+                {
+                    std::cout << "reading number: " << number_vec[i] << std::endl;
+                }
+                number_vec.clear();
+                lock.unlock();
+            }
+        }
+
+        void run()
+        {
+            std::thread t1(writer);
+            std::thread t2(writer);
+            std::thread t3(reader);
+
+            t1.join();
+            t2.join();
+            t3.join();
+
+        }
+    }
+
+
+    void run()
+    {
+        //task1::run();
+        task2::run();
+    }
+
+}
+
 int main()
 {   
 
@@ -2160,7 +2273,8 @@ int main()
     //Fusion::run();
 
     //STL_extended::run();
-    ProducerConsumer::run();
+    //ProducerConsumer::run();
+    ConditionalVariable::run();
 
     //learn topics in future
         // type_traits
