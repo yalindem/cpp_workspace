@@ -16,6 +16,7 @@
 #include <cstring>
 #include <utility>
 #include <cstdlib>
+#include <atomic>
 
 namespace ClassProblems
 {
@@ -2240,6 +2241,58 @@ namespace ConditionalVariable
 
 }
 
+namespace Atomic
+{
+
+    std::atomic<int> safe_counter(0);
+
+    // Normal (mutex gerektiren) sayaç
+    int unsafe_counter = 0;
+    std::mutex unsafe_mtx; // Güvenli hale getirmek için mutex gerekli
+
+    void increment_task() {
+        for (int i = 0; i < 100000; ++i) {
+            // 1. Atomik Artırma (Thread-Safe)
+            safe_counter++; 
+            
+            // 2. Güvenli Olmayan Artırma (Mutex ile düzeltilmesi gerekir)
+            // Eğer bu satırda mutex olmasaydı, sonuç 100,000,000 olmazdı.
+            /*
+            unsafe_mtx.lock();
+            unsafe_counter++;
+            unsafe_mtx.unlock();
+            */
+        }
+    }
+
+    void run()
+    {
+        const int num_threads = 10;
+        std::vector<std::thread> threads;
+
+        // Thread'leri oluştur ve başlat
+        for (int i = 0; i < num_threads; ++i) {
+            threads.emplace_back(increment_task);
+        }
+
+        // Tüm thread'lerin bitmesini bekle
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        // Beklenen sonuç: 10 thread * 100,000 artış = 1,000,000
+        long long expected_result = num_threads * 100000;
+
+        std::cout << "Toplam Beklenen Sonuç: " << expected_result << std::endl;
+        std::cout << "std::atomic<int> Sonuç: " << safe_counter.load() << std::endl;
+        // std::atomic nesnesindeki değeri almak için .load() kullanılır (veya doğrudan erişim izin verilir)
+        
+        // unsafe_counter'ı göstermek için, yukarıdaki yorum satırlarını açmanız ve main'de de mutex kullanmanız gerekir.
+        // std::cout << "Unsafe Counter Sonuç (Mutex ile): " << unsafe_counter << std::endl;
+
+    }
+}
+
 int main()
 {   
 
@@ -2274,7 +2327,9 @@ int main()
 
     //STL_extended::run();
     //ProducerConsumer::run();
-    ConditionalVariable::run();
+    //ConditionalVariable::run();
+
+    Atomic::run();
 
     //learn topics in future
         // type_traits
