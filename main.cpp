@@ -2243,53 +2243,126 @@ namespace ConditionalVariable
 
 namespace Atomic
 {
+    /*
+        Bu mükemmel bir soru ve tam olarak C++ eşzamanlılık yönetiminin kalbine iniyor!
+        Kısa Cevap: Evet, unsafe_increment fonksiyonunu std::mutex kullanarak doğru bir şekilde kilitlerseniz, sonuç olarak elde ettiğiniz nihai değer std::atomic kullandığınız sonuçla aynı olacaktır.
+        Ancak, bu iki yaklaşım nasıl çalıştığı ve ne zaman tercih edilmesi gerektiği açısından hala farklıdır:
+        Karşılaştırma: Mutex vs. Atomic
 
-    std::atomic<int> safe_counter(0);
+        Hem std::atomic hem de doğru kullanılan std::mutex, veri yarışını önler ve paylaşılan verinin bütünlüğünü (integrity) korur. Farklılıkları, çalışma biçimlerindedir:
 
-    // Normal (mutex gerektiren) sayaç
-    int unsafe_counter = 0;
-    std::mutex unsafe_mtx; // Güvenli hale getirmek için mutex gerekli
+        1. Kilit Mekanizması (Mekanizma Farkı)
 
-    void increment_task() {
-        for (int i = 0; i < 100000; ++i) {
-            // 1. Atomik Artırma (Thread-Safe)
-            safe_counter++; 
-            
-            // 2. Güvenli Olmayan Artırma (Mutex ile düzeltilmesi gerekir)
-            // Eğer bu satırda mutex olmasaydı, sonuç 100,000,000 olmazdı.
-            /*
-            unsafe_mtx.lock();
-            unsafe_counter++;
-            unsafe_mtx.unlock();
-            */
+        Özellik	std::atomic<T> (Örn: atomic_counter++)	std::mutex ile Korunan Kod (Örn: mtx.lock(); unsafe_counter++; mtx.unlock();)
+        Temel İşlem	Atomik Operasyon (Hardware/Compiler Level): İşlem tek bir bölünemez komut olarak yürütülür. Genellikle Lock-Free'dir.	İşletim Sistemi Kilidi (OS Lock): Bir thread kiliti alır. Diğer thread'ler kilit açılana kadar işletim sistemi tarafından BLOKE EDİLİR ve bekletilir.
+        Performans	Genellikle daha hızlıdır, bağlam değiştirme (context switching) maliyeti yoktur.	Kilidi almak ve bırakmak ek yük getirir. Bloklanan thread'lerin CPU'yu boş yere meşgul etme riski vardır.
+        Kullanım Alanı	Tek bir basit değişkenin okunması/yazılması.	Birden fazla değişkenin aynı anda güncellenmesi gereken kritik bölgeler (örneğin, önce sayaç artır, sonra o sayaçla ilişkili bir nesneyi güncelle).
+
+        2. Kod Örneği ile Görselleştirme (Düzeltilmiş Senaryo 2)
+
+        Eğer ikinci senaryoyu mutex ile düzeltseydik:
+        C++
+
+        std::mutex unsafe_mtx;
+        int safe_counter_with_mutex = 0;
+
+        void safe_increment_with_mutex() {
+            for (int i = 0; i < INCREMENTS_PER_THREAD; ++i) {
+                // Kilit al
+                unsafe_mtx.lock(); 
+                
+                safe_counter_with_mutex++; // Kritik Bölge
+                
+                // Kilidi bırak
+                unsafe_mtx.unlock(); 
+            }
+        }
+
+        Bu safe_increment_with_mutex fonksiyonu da, atomic_increment gibi, sonunda 1,000,000 sonucunu verecektir.
+        Ne Zaman Hangisini Tercih Etmeli?
+        Tek Bir Değer: Sadece bir sayacı, bir bayrağı (bool) veya bir işaretçiyi güvenli bir şekilde güncellemeniz gerekiyorsa, mutlaka std::atomic kullanın. Daha hızlıdır ve daha az kod karmaşıklığı demektir.
+        Birden Fazla Değer: Eğer bir işlemde, hem bir sayacı artırıp hem de o sayacın değerine bağlı başka bir veri yapısının durumunu güncellemeniz gerekiyorsa (iki adımın aynı anda, bölünemez bir şekilde gerçekleşmesi gerekiyorsa), std::mutex kullanmalısınız.
+        Örnek: Bir kuyruğa eleman eklerken hem kuyruk yapısını hem de o anki eleman sayısını güncelliyorsunuz. Bu iki eylemin atomik olması için tek bir kilit (mutex) altında toplanması gerekir.
+    */
+
+    // --- Ayarlar ---
+    const int NUM_THREADS = 10;
+    const int INCREMENTS_PER_THREAD = 100000;
+    const long long EXPECTED_RESULT = (long long)NUM_THREADS * INCREMENTS_PER_THREAD;
+
+    // ======================================================
+    // SENARYO 1: ATOMİK İLE GÜVENLİ ÇALIŞMA (Thread-Safe)
+    // ======================================================
+    std::atomic<long long> atomic_counter(0);
+
+    void atomic_increment() {
+        for (int i = 0; i < INCREMENTS_PER_THREAD; ++i) {
+            // Bu işlem atomiktir. Kilit kullanmadan güvenle artar.
+            atomic_counter++; 
         }
     }
 
-    void run()
-    {
-        const int num_threads = 10;
-        std::vector<std::thread> threads;
+    // ======================================================
+    // SENARYO 2: STANDART INT İLE GÜVENLİ OLMAYAN ÇALIŞMA (Data Race)
+    // ======================================================
 
-        // Thread'leri oluştur ve başlat
-        for (int i = 0; i < num_threads; ++i) {
-            threads.emplace_back(increment_task);
+    std::mutex unsafe_mtx;
+    int safe_counter_with_mutex = 0;
+
+    void safe_increment_with_mutex() {
+        for (int i = 0; i < INCREMENTS_PER_THREAD; ++i) {
+            // Kilit al
+            unsafe_mtx.lock(); 
+            
+            safe_counter_with_mutex++; // Kritik Bölge
+            
+            // Kilidi bırak
+            unsafe_mtx.unlock(); 
+        }
+    }
+
+    void run() {
+        // --- ATOMİK TEST ---
+        std::vector<std::thread> atomic_threads;
+        for (int i = 0; i < NUM_THREADS; ++i) {
+            atomic_threads.emplace_back(atomic_increment);
         }
 
-        // Tüm thread'lerin bitmesini bekle
-        for (auto& t : threads) {
+        for (auto& t : atomic_threads) {
             t.join();
         }
 
-        // Beklenen sonuç: 10 thread * 100,000 artış = 1,000,000
-        long long expected_result = num_threads * 100000;
-
-        std::cout << "Toplam Beklenen Sonuç: " << expected_result << std::endl;
-        std::cout << "std::atomic<int> Sonuç: " << safe_counter.load() << std::endl;
-        // std::atomic nesnesindeki değeri almak için .load() kullanılır (veya doğrudan erişim izin verilir)
+        std::cout << "--- ATOMİK TEST SONUCU ---" << std::endl;
+        std::cout << "Beklenen Sonuç: " << EXPECTED_RESULT << std::endl;
+        std::cout << "Gerçek Sonuç: " << atomic_counter.load() << std::endl;
         
-        // unsafe_counter'ı göstermek için, yukarıdaki yorum satırlarını açmanız ve main'de de mutex kullanmanız gerekir.
-        // std::cout << "Unsafe Counter Sonuç (Mutex ile): " << unsafe_counter << std::endl;
+        if (atomic_counter.load() == EXPECTED_RESULT) {
+            std::cout << "✅ Atomik işlem BAŞARILI ve GÜVENLİ." << std::endl;
+        } else {
+            std::cout << "❌ Atomik işlem HATALI (Bu beklenmez)." << std::endl;
+        }
 
+        std::cout << "\n" << std::string(40, '-') << "\n" << std::endl;
+
+        // --- STANDART INT TEST ---
+        std::vector<std::thread> safe_threads;
+        for (int i = 0; i < NUM_THREADS; ++i) {
+            safe_threads.emplace_back(safe_increment_with_mutex);
+        }
+
+        for (auto& t : safe_threads) {
+            t.join();
+        }
+
+        std::cout << "--- STANDART INT TEST SONUCU (Veri Yarışı Var) ---" << std::endl;
+        std::cout << "Beklenen Sonuç: " << EXPECTED_RESULT << std::endl;
+        std::cout << "Gerçek Sonuç: " << safe_counter_with_mutex << std::endl;
+        
+        if (safe_counter_with_mutex != EXPECTED_RESULT) {
+            std::cout << "❌ Güvenli olmayan işlem BAŞARISIZ! Veri kayboldu (Data Race)." << std::endl;
+        } else {
+            std::cout << "✅ basarili" << std::endl;
+        }
     }
 }
 
