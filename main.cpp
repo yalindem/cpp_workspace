@@ -2366,6 +2366,241 @@ namespace Atomic
     }
 }
 
+namespace Async
+{   
+
+    // Gerçekleştireceğimiz görev (2 saniye süreceğini varsayalım)
+    int calculate_and_return(int input) {
+        std::cout << "[TASK] Hesaplama basladi. Thread ID: " 
+                << std::this_thread::get_id() << std::endl;
+        
+        std::this_thread::sleep_for(std::chrono::seconds(2)); // İşlem süresi simülasyonu
+        
+        int result = input * 2;
+        std::cout << "[TASK] Hesaplama bitti. Sonuc: " << result << std::endl;
+        return result;
+    }
+
+    void demo_std_thread() {
+        std::cout << "\n=========================================" << std::endl;
+        std::cout << "DEMO 1: std::thread (Sonucu almak zor)" << std::endl;
+        std::cout << "Ana Thread ID: " << std::this_thread::get_id() << std::endl;
+
+        // 1. std::thread ile thread oluşturulur
+        // DİKKAT: calculate_and_return'ın döndürdüğü int değeri KAYBOLUR!
+        std::thread t(calculate_and_return, 5); 
+
+        std::cout << "Ana thread, thread'i baslattı ve baska isler yapabilir..." << std::endl;
+        
+        // 2. Kaynak yönetimi ZORUNLUDUR: Join ile bitmesini beklemeliyiz
+        t.join(); 
+        
+        std::cout << "Thread bitti, ancak ana program 'calculate_and_return'in sonucunu (10) bilmiyor." << std::endl;
+        std::cout << "=========================================" << std::endl;
+    }
+
+    void demo_std_async() {
+        std::cout << "\n=========================================" << std::endl;
+        std::cout << "DEMO 2: std::async (Sonucu almak kolay)" << std::endl;
+        std::cout << "Ana Thread ID: " << std::this_thread::get_id() << std::endl;
+        
+        // 1. std::async ile görev başlatılır. std::future<int> döner.
+        // std::launch::async ile yeni bir thread'de çalışması garanti edilir.
+        std::future<int> future_result = std::async(std::launch::async, calculate_and_return, 10);
+
+        std::cout << "Ana thread, gorevi baslatti ve baska isler yapabilir..." << std::endl;
+        
+        // 2. Sonucu almak için .get() çağrılır. Bu, sonuç hazır olana kadar bloke eder.
+        int final_result = future_result.get(); 
+        
+        std::cout << "Sonuc basariyla Future icinden cekildi: " << final_result << std::endl;
+        std::cout << "=========================================" << std::endl;
+    }
+
+
+    namespace Task1
+    {
+
+        std::thread::id prepare_order()
+        {
+            std::cout << "order is preparing ...\n";
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::thread::id id = std::this_thread::get_id();
+            std::cout << "order is ready\n";
+            return id; 
+        }
+
+        std::string assign_kurye()
+        {
+            std::cout << "kurye is assigning...\n";
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            std::string name = "mehmet";
+            std::cout << name << " is on the way...\n";
+            return name;
+        }
+
+        void run()
+        {   
+            std::future<std::thread::id> id = std::async(std::launch::async, prepare_order);
+            std::future<std::string> name = std::async(std::launch::async, assign_kurye);
+            
+            std::thread::id id_number = id.get();
+            std::string kurye_name = name.get();
+
+            std::cout << "kurye name is " << kurye_name << "\n";
+            std::cout << "id: " << id_number << "\n";
+
+            
+        }
+    }
+
+
+    void run()
+    {
+        //demo_std_thread();
+        //demo_std_async();
+        //Task1::run();
+       
+    }
+}
+
+namespace FuturePromise
+{
+
+    namespace ThreadPromiseFuture
+    {
+        /**
+         * @brief Worker thread'de çalışacak ve sonucu promise ile iletecek fonksiyon.
+         * @param sayi Karesi alınacak sayı.
+         * @param prom Sonucu ileteceğimiz promise nesnesi (move ile alınır).
+         */
+        void calculate_square(int sayi, std::promise<int>&& prom)
+        {
+            std::cout << "[Worker Thread] Hesaplama basladi. Sayi: " << sayi << std::endl;
+
+            // İşlem süresi simülasyonu
+            std::this_thread::sleep_for(std::chrono::milliseconds(1500)); 
+
+            int sonuc = sayi * sayi; // Hesaplama
+            
+            std::cout << "[Worker Thread] Hesaplama bitti. Sonucu promise'a iletiyorum." << std::endl;
+
+            try
+            {
+                // Sonucu promise üzerinden ayarla
+                prom.set_value(sonuc);
+            }
+            catch (const std::future_error& e)
+            {
+                // Eğer promise zaten ayarlanmışsa (bu senaryoda olmamalı)
+                std::cerr << "[Worker HATA] Promise ayarlanirken hata: " << e.what() << std::endl;
+            }
+        }
+
+        void run()
+        {
+            const int input_number = 12;
+
+            // 1. Promise ve Future çiftini oluştur
+            std::promise<int> square_promise;
+            
+            // 2. Future'ı promise'dan al (Ana thread bunu kullanacak)
+            std::future<int> square_future = square_promise.get_future();
+            
+            std::cout << "[Main Thread] Hesaplama istegi baslatiliyor..." << std::endl;
+            
+            // 3. Thread'i oluştur ve promise nesnesini move ile worker fonksiyona devret
+            // (std::move, promise'ın sahipliğini devrederek kopyalanmasını engeller)
+            std::thread worker_t(calculate_square, input_number, std::move(square_promise));
+
+            // Ana thread, sonuç beklerken başka işler yapabilir
+            std::cout << "[Main Thread] Hesaplama arka planda devam ediyor..." << std::endl;
+            
+            // Örneğin, 1 saniye beklerken başka bir iş yapalım
+            std::this_thread::sleep_for(std::chrono::seconds(1)); 
+            std::cout << "[Main Thread] 1 saniyelik baska is yapildi." << std::endl;
+
+            // 4. Future ile sonucu bekle ve al (.get() çağrısı burada bloke eder)
+            try
+            {
+                std::cout << "[Main Thread] Sonucu future'dan cekmek icin bekliyorum..." << std::endl;
+                int final_result = square_future.get();
+                std::cout << "[Main Thread] Sonuc Future icinden alindi: " << final_result << std::endl;
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "[Main Thread HATA] Sonuc alinirken hata: " << e.what() << std::endl;
+            }
+            
+            // 5. Thread kaynağını temizle (std::thread için zorunludur)
+            if (worker_t.joinable()) {
+                worker_t.join();
+            }
+
+            std::cout << "[Main Thread] Program sonlandi." << std::endl;
+        }
+    }
+
+    namespace Task1
+    {
+
+        void worker(int id, std::promise<std::string>&& prom)
+        {   
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+            std::string str_id = std::to_string(id);
+            if(id>=100)
+            {
+                throw std::runtime_error("id: " + str_id + ", basarisiz\n");
+            }
+
+            try
+            {
+                prom.set_value("id: "+ str_id + ", islem basarili\n");
+            }
+            catch(const std::exception_ptr e)
+            {
+                prom.set_exception(e);
+            }
+            
+        }
+        
+
+        void run()
+        {
+            std::promise<std::string> prom;
+            std::future<std::string> future = prom.get_future();
+            int id = std::hash<std::thread::id>{}(std::this_thread::get_id()) % 301;
+
+            std::thread t1(worker, id, std::move(prom));
+
+            try
+            {
+                std::string res = future.get();
+                std::cout << "res: " << res << "\n";
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << e.what() << '\n';
+            }
+            
+
+            if(t1.joinable())
+            {
+                t1.join();
+            }
+
+        }
+    }
+
+    void run()
+    {
+        //ThreadPromiseFuture::run();
+        Task1::run();
+    }
+
+
+}
+
 int main()
 {   
 
@@ -2402,7 +2637,9 @@ int main()
     //ProducerConsumer::run();
     //ConditionalVariable::run();
 
-    Atomic::run();
+    //Atomic::run();
+    //Async::run();
+    FuturePromise::run();
 
     //learn topics in future
         // type_traits
