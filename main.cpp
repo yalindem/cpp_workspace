@@ -2592,6 +2592,7 @@ namespace FuturePromise
         }
     }
 
+
     void run()
     {
         //ThreadPromiseFuture::run();
@@ -2599,6 +2600,190 @@ namespace FuturePromise
     }
 
 
+}
+
+namespace AsyncandFuture
+{
+
+    int calculate_sum(int a, int b) {
+        std::cout << "Thread ID: " << std::this_thread::get_id() 
+                << " - Hesaplama başladı..." << std::endl;
+        
+        // İşlem süresini simüle etmek için 2 saniye bekletme
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        
+        int result = a + b;
+        std::cout << "Thread ID: " << std::this_thread::get_id() 
+                << " - Hesaplama bitti. Sonuç: " << result << std::endl;
+        return result;
+    }
+
+    void run()
+    {
+
+        std::cout << "Ana Thread ID: " << std::this_thread::get_id() << std::endl;
+
+        // 1. std::async ile asenkron görevi başlat
+        // 'calculate_sum(10, 20)' fonksiyonu yeni bir thread'de (veya ertelenmiş olarak) çalıştırılacak.
+        // Geriye dönüş tipi (int) bir std::future<int> içine sarılır.
+        std::future<int> future_result = std::async(std::launch::async, calculate_sum, 10, 20);
+
+        // 2. Ana thread, hesaplama devam ederken başka işler yapabilir
+        std::cout << "Ana thread meşgul: Hesaplama bekleniyor..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Başka bir iş yapma simülasyonu
+
+        // 3. Sonucu almak için 'get()' çağrılır.
+        // Eğer hesaplama bitmediyse, 'get()' çağrılan thread burada BLOKE olur
+        // ve sonuç hazır olana kadar bekler.
+        std::cout << "Ana thread: Şimdi sonucu alıyorum." << std::endl;
+        
+        try {
+            int sum = future_result.get(); // Sonucu al ve bekle
+            std::cout << "Ana thread: Gelen sonuç = " << sum << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Bir hata oluştu: " << e.what() << std::endl;
+        }
+        
+        // NOT: Bir future nesnesinde 'get()' sadece bir kez çağrılabilir.
+        // Sonraki çağrılar tanımsız davranışa yol açar.
+    }
+
+}
+
+namespace Tasks
+{
+    namespace Task1
+    {
+        std::queue<int> queue;
+        std::mutex mtx;
+        std::condition_variable cv;
+
+        void producer()
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));       
+                {
+                    std::lock_guard<std::mutex> lock (mtx);
+                    for(int i = 1; i<11; ++i)
+                    {
+                        queue.push(i);
+                        std::cout << "eleman eklendi: " << i << "\n";
+                    }
+                    cv.notify_one();
+                }
+            }
+
+        }
+
+        void consumer()
+        {
+            while(true)
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::unique_lock<std::mutex> lock(mtx);
+                cv.wait(lock, [](){return !queue.empty();});
+
+                int a = queue.front();
+                queue.pop();
+
+                std::cout << "eleman: " << a << "\n";
+                std::cout << "---\n";
+            }
+        }
+
+        void run()
+        {
+            std::thread t1(producer);
+            std::thread t2(consumer);
+
+            t1.join();
+            t2.join();
+        }
+    }
+
+
+    void run()
+    {
+        Task1::run();
+    }
+
+    
+}
+
+
+#include "projects/personal_note/note_manager.hpp"
+
+namespace Note_task
+{
+    void display_menu() {
+        std::cout << "\n=====================================\n";
+        std::cout << "     Kişisel Not Yöneticisi (C++)    \n";
+        std::cout << "=====================================\n";
+        std::cout << "1. Not Ekle\n";
+        std::cout << "2. Tüm Notları Listele\n";
+        std::cout << "3. Not Sil (ID ile)\n";
+        std::cout << "4. Kaydet ve Çık\n";
+        std::cout << "-------------------------------------\n";
+        std::cout << "Seciminiz: ";
+    }
+
+    void run() {
+        NoteManager manager; 
+        int choice = 0;
+        int id = 0;
+        do {
+            display_menu();
+            std::cin >> choice;
+
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+            std::string header, content;
+            int id_to_delete;
+
+            switch (choice) {
+                case 1:
+                    std::cout << "\n--- Yeni Not Ekle ---\n";
+                    std::cout << "Baslik: ";
+                    std::getline(std::cin, header);
+                    
+                    std::cout << "Icerik: ";
+                    std::getline(std::cin, content);
+                    
+                    manager.add_note(header, content, id);
+                    id++;
+                    break;
+
+                case 2:
+                    // --- Notları Listele ---
+                    std::cout << "\n--- Kayitli Notlar ---\n";
+                    manager.display_notes();
+                    break;
+
+                case 3:
+                    std::cout << "\n--- Not Silme ---\n";
+                    std::cout << "Silinecek notun ID'sini girin: ";
+                    if (std::cin >> id_to_delete) {
+                        manager.delete_note(id_to_delete);
+                    } else {
+                        std::cin.clear();
+                        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                    }
+                    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                    break;
+
+                case 4:
+                    std::cout << "\nProgram sonlandiriliyor. Notlariniz kaydediliyor...\n";
+                    break;
+
+                default:
+                    std::cout << "Gecersiz secim! Lutfen tekrar deneyin.\n";
+                    break;
+            }
+
+        } while (choice != 4);
+
+    }
 }
 
 int main()
@@ -2639,7 +2824,13 @@ int main()
 
     //Atomic::run();
     //Async::run();
-    FuturePromise::run();
+    //FuturePromise::run();
+    //AsyncandFuture::run();
+
+    //Tasks::run();
+
+    Note_task::run();
+
 
     //learn topics in future
         // type_traits
